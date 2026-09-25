@@ -33,6 +33,11 @@ pyinstaller --onefile --noconsole --name BaixeLivros --collect-all selenium baix
 
 O executável fica em `dist/BaixeLivros.exe`; copie-o para onde quiser.
 
+## Segurança
+
+O app só aceita arquivos de tipo de livro, só segue links HTTPS e nunca executa o que baixa. Detalhes e como
+reportar uma vulnerabilidade em [SECURITY.md](SECURITY.md).
+
 ## Observação
 
 Os seletores da página de busca (`/search?q=…`, `li.bl-rs__item`…) dependem do layout do site. Se ele mudar,
