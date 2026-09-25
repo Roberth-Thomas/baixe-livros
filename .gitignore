@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Build do PyInstaller (o .exe é gerado, não versionado)
+build/
+dist/
+*.spec
+*.exe
+
+# Livros baixados e pastas temporárias do app
+Teste de Download/
+.baixando-*/
