@@ -9,6 +9,9 @@ dist/
 *.spec
 *.exe
 
-# Livros baixados e pastas temporárias do app
+# Livros baixados, parciais de download e registro da biblioteca
 Teste de Download/
-.baixando-*/
+.baixando/
+*.part
+*.part.json
+*.sqlite3
