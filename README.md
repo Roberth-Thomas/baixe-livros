@@ -6,6 +6,9 @@ ambos por API aberta — sem navegador por trás e sem dependências além do Py
 
 ## O que faz
 
+- **Só livros:** o Internet Archive mistura livros com documentos do governo, processos, periódicos, artigos e
+  manuais; o programa descarta essas coleções e só aceita itens com cara de livro (veja `parece_livro` em
+  `fontes.py`). O filtro é por coleção, então um jornal catalogado como "livro" ainda pode passar.
 - **Fila em lote:** cole vários títulos (um por linha) e eles baixam em paralelo, com progresso por item,
   **Parar tudo** e **Repetir falhas**.
 - **Tolera erros de digitação e acentos:** compara o título digitado com os resultados e, se nada servir, tenta

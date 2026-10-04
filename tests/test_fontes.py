@@ -70,8 +70,9 @@ class TestGutenberg:
 
 IA = {"response": {"numFound": 4, "docs": [
     {"identifier": "domcasmurro_1899", "title": "Dom Casmurro", "creator": "Machado de Assis", "language": "por",
-     "licenseurl": "https://creativecommons.org/publicdomain/mark/1.0/"},
-    {"identifier": "dom-casmurro-2ed", "title": ["Dom Casmurro 2ed"], "creator": ["A", "B"], "language": ["por", "eng"]},
+     "licenseurl": "https://creativecommons.org/publicdomain/mark/1.0/", "collection": ["booksbylanguage_portuguese"]},
+    {"identifier": "dom-casmurro-2ed", "title": ["Dom Casmurro 2ed"], "creator": ["A", "B"], "language": ["por", "eng"],
+     "collection": "opensource"},
     {"identifier": "../../etc/passwd", "title": "Malicioso"},
     {"identifier": "sem_titulo"},
 ]}}
@@ -95,7 +96,8 @@ class TestInternetArchive:
         q = parse_qs(urlsplit(h.urls[0][0]).query)["q"][0]
         # tudo que o usuário digitou virou palavra solta; os únicos operadores são os que o app monta
         assert q == ("title:(dom AND (*title OR title*) AND (*mediatype OR mediatype*) AND (*texts OR texts*) "
-                     "AND (*casmurro OR casmurro*)) AND mediatype:texts AND -access-restricted-item:true")
+                     "AND (*casmurro OR casmurro*)) AND mediatype:texts AND -access-restricted-item:true "
+                     f"AND -collection:({' OR '.join(f.COLECOES_NAO_LIVRO_EXATAS)})")
         assert '"' not in q and "\\" not in q and "-mediatype" not in q
 
     def test_operadores_digitados_pelo_usuario_sao_descartados(self):
@@ -142,6 +144,70 @@ class TestInternetArchive:
         o = Obra("archive", "../x", "T", "", "", "")
         with pytest.raises(ErroRede):
             InternetArchive().arquivos(o, HttpJson({}))
+
+
+def doc(ident, titulo, colecoes, autor=None):
+    d = {"identifier": ident, "title": titulo, "collection": colecoes}
+    if autor:
+        d["creator"] = autor
+    return d
+
+
+class TestSoLivros:
+    """Regressão: o Internet Archive devolvia documentos da CIA, processos, periódicos e manuais."""
+
+    def buscar(self, *docs):
+        h = HttpJson({"advancedsearch": {"response": {"docs": list(docs)}}})
+        return [o.id for o in InternetArchive().buscar("murro", h)]
+
+    def test_descarta_o_que_nao_e_livro(self):
+        ids = self.buscar(
+            doc("cia1", "LETTER TO HON. EDWARD R. MURROW", ["cia-collection", "government-documents"], "Central Intelligence Agency"),
+            doc("proc", "Melissa L Murrow", ["usfederalcourts", "USGovernmentDocuments"]),
+            doc("papers", "Edward R. Murrow Papers 1954", ["pub_edward-r-murrow-papers", "uncg_microfilm", "periodicals"]),
+            doc("artigo", "A REPLACEMENT NAME FOR IRACEMA", ["biostor", "journals"], "Fernando Pérez-Miles"),
+            doc("manual", "American Standard Murro 0955 user manual", ["manuals", "opensource"], "American Standard"),
+            doc("jornal", "O Casmurro N 34 1905", ["sim_casmurro", "newspapers"], "Telmo Larcher"),
+            doc("livro", "Dom Casmurro", ["booksbylanguage_portuguese", "booksbylanguage"], "Machado de Assis"))
+        assert ids == ["livro"]
+
+    def test_colecao_de_nao_livro_vence_a_de_livro(self):
+        assert self.buscar(doc("x", "Titulo", ["americana", "periodicals"], "Autor")) == []
+
+    def test_colecoes_de_livros_basta_mesmo_sem_autor(self):
+        assert self.buscar(doc("a", "Iracema", ["booksbylanguage_portuguese"]),
+                           doc("b", "Iracema", ["luso-livros"]), doc("c", "Iracema", ["gutenberg"])) == ["a", "b", "c"]
+
+    def test_envio_comum_sem_autor_e_descartado_mas_com_autor_passa(self):
+        assert self.buscar(doc("sem", "Dom Casmurro Assis 2ed", ["opensource"]),
+                           doc("com", "Dom Casmurro", ["opensource", "community"], "Machado de Assis")) == ["com"]
+
+    def test_colecao_ausente_ou_em_formato_estranho(self):
+        assert self.buscar({"identifier": "a", "title": "T", "creator": "X"}, doc("b", "T", None, "X"),
+                           doc("c", "T", [1, "americana"])) == ["a", "b", "c"]
+
+    def test_pede_mais_resultados_ja_que_parte_sera_descartada(self):
+        h = HttpJson({"advancedsearch": {"response": {"docs": []}}})
+        InternetArchive().buscar("dom casmurro", h)
+        from urllib.parse import parse_qs, urlsplit
+        assert parse_qs(urlsplit(h.urls[0][0]).query)["rows"] == ["25"]
+        assert "collection" in parse_qs(urlsplit(h.urls[0][0]).query)["fl[]"]
+
+    def test_gutenberg_ignora_audio_e_outras_midias(self):
+        dados = {"results": [
+            {"id": 1, "title": "Livro", "authors": [], "languages": ["pt"], "media_type": "Text", "formats": {}},
+            {"id": 2, "title": "Audiolivro", "authors": [], "languages": ["pt"], "media_type": "Sound", "formats": {}},
+            {"id": 3, "title": "Sem tipo", "authors": [], "languages": ["pt"], "formats": {}}]}
+        assert [o.id for o in Gutenberg().buscar("x", HttpJson({"gutendex": dados}))] == ["1", "3"]
+
+    @pytest.mark.parametrize("colecoes,autor,esperado", [
+        (["booksbylanguage_spanish"], "", True), (["government-documents"], "Fulano", False),
+        (["Periodicals"], "Fulano", False), (["opensource"], "", False), (["opensource"], "  ", False),
+        (["opensource"], "Fulano", True), ([], "Fulano", True), ([], "", False),
+        (["microlog", "microfiche"], "Fulano", False), (["classmates"], "Fulano", False),
+        (["emptyfiles", "community"], "Fulano", False), (["booksbylanguage_portuguese"], "", True)])
+    def test_parece_livro(self, colecoes, autor, esperado):
+        assert f.parece_livro(colecoes, autor) is esperado
 
 
 def test_fontes_padrao_tem_a_interface_esperada():

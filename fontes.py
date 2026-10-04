@@ -18,6 +18,30 @@ from titulos import tokens
 TENTATIVAS_BUSCA = 2   # buscas são rápidas e repetidas; falhar cedo deixa o app mais ágil
 OPERADORES = {"and", "or", "not", "to"}
 
+# O Internet Archive guarda de tudo como "texts": documentos do governo, processos, periódicos, artigos,
+# manuais... Só entra o que tem cara de livro, decidido pelas coleções do item.
+COLECOES_NAO_LIVRO_EXATAS = (   # também excluídas na própria busca, para não gastarem as vagas dos resultados
+    "government-documents", "usgovernmentmirrors", "USGovernmentDocuments", "usfederalcourts", "periodicals",
+    "journals", "biostor", "cia-collection", "nationalsecurityarchive", "uncg_microfilm",
+    "britishparliamentarypublications", "ondata-mirror", "newspapers", "magazine_rack")
+PREFIXOS_NAO_LIVRO = (          # padrões de coleções que nunca são livros (comparação sem maiúsculas)
+    "government", "usgov", "usfederal", "cia-", "nationalsecurity", "periodical", "journal", "biostor",
+    "newspaper", "magazine", "micro", "uncg", "pub_", "sim_", "parliament", "britishparliament", "ondata",
+    "patent", "court", "biodiversity", "manual", "fedlink", "dtic", "nasa", "datasets", "classmates",
+    "yearbook", "emptyfiles")
+COLECOES_LIVRO = ("booksbylanguage", "luso-livros", "gutenberg", "americana", "toronto", "europeanlibraries",
+                  "brigham_young_university", "folkscanomy", "autores", "universityofottawa")
+
+
+def parece_livro(colecoes: list[str], autor: str) -> bool:
+    """Coleção de não-livro vence sempre; coleção de livros basta; sem nenhuma das duas, exige autor."""
+    nomes = [c.lower() for c in colecoes]
+    if any(n.startswith(PREFIXOS_NAO_LIVRO) for n in nomes):
+        return False
+    if any(n.startswith(COLECOES_LIVRO) for n in nomes):
+        return True
+    return bool(autor.strip())
+
 
 class Obra(NamedTuple):
     fonte: str          # identificador estável da fonte (ex.: "gutenberg")
@@ -59,6 +83,8 @@ class Gutenberg:
         for b in dados.get("results", []):
             if b.get("copyright") is True or not b.get("id") or not b.get("title"):
                 continue
+            if b.get("media_type", "Text") != "Text":
+                continue   # áudio, imagens, partituras...: só texto
             autores = ", ".join(a.get("name", "") for a in b.get("authors", []) if a.get("name"))
             idiomas = b.get("languages") or [""]
             obras.append(Obra(self.id, str(b["id"]), b["title"], autores, idiomas[0],
@@ -93,9 +119,10 @@ class InternetArchive:
             return []
         # palavras de 4+ letras casam por começo OU fim (tolera erro de digitação no início ou no fim)
         termos = " AND ".join(f"(*{p} OR {p}*)" if len(p) >= 4 else p for p in palavras)
-        q = f"title:({termos}) AND mediatype:texts AND -access-restricted-item:true"
-        params = [("q", q), ("rows", "15"), ("output", "json")]
-        params += [("fl[]", c) for c in ("identifier", "title", "creator", "language", "licenseurl")]
+        fora = " OR ".join(COLECOES_NAO_LIVRO_EXATAS)
+        q = f"title:({termos}) AND mediatype:texts AND -access-restricted-item:true AND -collection:({fora})"
+        params = [("q", q), ("rows", "25"), ("output", "json")]
+        params += [("fl[]", c) for c in ("identifier", "title", "creator", "language", "licenseurl", "collection")]
         dados = http.get_json("https://archive.org/advancedsearch.php?" + urlencode(params), cancelado,
                               tentativas=TENTATIVAS_BUSCA)
         obras = []
@@ -103,7 +130,10 @@ class InternetArchive:
             ident = str(d.get("identifier", ""))
             if not self.ID_VALIDO.match(ident) or not d.get("title"):
                 continue
-            obras.append(Obra(self.id, ident, _texto(d.get("title")), _texto(d.get("creator")),
+            autor = _texto(d.get("creator"))
+            if not parece_livro([str(c) for c in _lista(d.get("collection"))], autor):
+                continue   # documento, periódico, manual... não é livro
+            obras.append(Obra(self.id, ident, _texto(d.get("title")), autor,
                               (_lista(d.get("language")) or [""])[0], self._licenca(_texto(d.get("licenseurl")))))
         return obras
 
