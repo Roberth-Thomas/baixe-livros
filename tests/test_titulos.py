@@ -32,6 +32,11 @@ class TestParecePeriodico:
         ("Revista Paradoxa 12", "Paradoxa Centro de Medios", "paradoxa"),
         ("Almanah Flacara 1984 pagina 228-287", "", "1984"),
         ("JORNAL O FUTURO #6", "PCBR", "jornal"),            # a palavra sozinha é categoria, não título: não isenta
+        ("ACERVO JORNAL A TARDE — ARQUIVO PÚBLICO DO ESTADO DA BAHIA", "", "jornal"),   # achado no teste real
+        ("O PRIMEIRO JORNAL PARAIBANO", "JOSÉ OZILDO DOS SANTOS", "jornal"),
+        ("Entrevista Carlos Liscano", "Wilson Javier Cardozo", "revista"),   # "revista" ~ "entrevista" na tolerância a erros
+        ("Devils Tower National Monument, Wyoming (1984)", "United States. National Park Service", "1984"),  # só número
+        ("Corpo Analítico Das Revistas Juliana Souza", "Juliana Souza", "revistas"),
         ("Revista de Obras Públicas de Puerto Rico", "", "revista"),
         ("Industry Newsletter", "", "industry"),                                          # palavra forte em qualquer lugar
         ("Twenty First Report on Committee on Petitions", "Lok Sabha Secretariat", "petitions"),  # autor institucional
@@ -54,9 +59,21 @@ class TestParecePeriodico:
         ("Jornal de um rebelde", "Sampaio, Albino Forjaz de", "jornal de um rebelde"),     # o usuário digitou a palavra
         ("Revista Paradoxa 12", "Paradoxa Centro de Medios", "revista paradoxa 12"),       # idem
         ("O Cortiço", "Aluísio Azevedo", "o cortico"),
+        ("A Journal of the Plague Year", "Daniel Defoe", "journal plague year"),
+        ("2001: A Space Odyssey", "Arthur C. Clarke", "2001"),                 # busca só por número: título curto serve
     ])
     def test_nao_descarta_livros(self, titulo, autor, digitado):
         assert b.parece_periodico(titulo, autor, digitado) is False
+
+
+class TestBuscaDeCategoria:
+    @pytest.mark.parametrize("digitado", ["jornal", "Revista", "jornais", "newsletter", "revistas jornal"])
+    def test_palavra_de_categoria_nao_e_titulo_de_livro(self, digitado):
+        assert b.eh_categoria(digitado) is True
+
+    @pytest.mark.parametrize("digitado", ["jornal de um rebelde", "dom casmurro", "1984", "", "revista paradoxa"])
+    def test_titulos_de_verdade_nao_sao_categoria(self, digitado):
+        assert b.eh_categoria(digitado) is False
 
 
 class TestPontuar:

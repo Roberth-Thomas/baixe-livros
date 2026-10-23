@@ -15,7 +15,7 @@ from erros import (BuscaIncompleta, Cancelado, DownloadFalhou, ErroFontes, ErroR
                    LivroNaoEncontrado, TipoNaoPermitido)
 from fontes import Arquivo, Obra
 from rede import Http
-from titulos import parece_periodico, pontuar, tokens, variantes_busca
+from titulos import eh_categoria, parece_periodico, pontuar, tokens, variantes_busca
 
 PASTA_PARCIAIS = ".baixando"
 MAX_CANDIDATOS = 5       # obras tentadas por título
@@ -202,6 +202,9 @@ def processar(titulo: str, ctx: Contexto, cancelado: Callable[[], bool] = lambda
     """Fluxo completo para UM título. Levanta LivroNaoEncontrado, DownloadFalhou, ErroFontes ou Cancelado."""
     os.makedirs(ctx.pasta, exist_ok=True)
     ctx.estado("Buscando")
+    if eh_categoria(titulo):
+        ctx.log(f"“{titulo}” é um tipo de publicação, não o título de um livro. Digite o título do livro.", None)
+        raise LivroNaoEncontrado(titulo)
     candidatos = encontrar(titulo, ctx, cancelado)
     if not candidatos:
         raise LivroNaoEncontrado(titulo)

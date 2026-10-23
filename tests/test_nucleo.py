@@ -90,6 +90,14 @@ class TestProcessar:
         assert n.processar("1984", ctx).nome == "1984"
         assert http.baixados == ["https://x.test/1.pdf"]
 
+    def test_palavra_de_categoria_nem_busca_e_explica(self, tmp_path):
+        """"jornal" não é título de livro: nem consulta as fontes (e não confunde com "fonte fora do ar")."""
+        ctx, fonte, http = cenario(tmp_path, obras=[obra(titulo="Jornal de um rebelde", autor="Sampaio")])
+        with pytest.raises(LivroNaoEncontrado):
+            n.processar("jornal", ctx)
+        assert fonte.consultas == [] and http.baixados == []
+        assert any("tipo de publicação" in m for m, _ in ctx.logs)
+
     def test_so_periodicos_nos_resultados_e_livro_nao_encontrado(self, tmp_path):
         obras = [obra(id="9", titulo="Haryana Gazette, 1984-09-14, No. 40", autor="Government of Haryana"),
                  obra(id="8", titulo="Revista Paradoxa 12", autor="Paradoxa Centro de Medios")]

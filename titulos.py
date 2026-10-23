@@ -73,6 +73,7 @@ _ARTIGOS = {"o", "os", "as", "the", "el", "la", "los", "las", "le", "les"}   # "
 _FORTES = {"newsletter", "newspaper", "newspapers", "magazine", "magazines", "yearbook", "gazette", "gazeta",
            "bulletin", "boletim", "boletin", "almanac", "almanah", "almanaque", "periodico", "periodicos"}
 _FRACAS = {"jornal", "journal", "revista", "revue", "rivista", "zeitschrift", "manual"}   # só se abrem o título
+_CATEGORIAS = _FRACAS | {"jornais", "revistas", "journals", "manuais", "manuals"} | _FORTES   # busca "só a categoria"
 _INSTITUCIONAIS = {"secretariat", "ministry", "ministerio", "government", "governo", "gobierno", "parliament",
                    "parlamento", "committee", "comite", "commission", "department", "departamento",
                    "jornal", "jornais", "newspaper", "gazette", "gazeta"}   # autor que é órgão/jornal, não pessoa
@@ -102,6 +103,12 @@ def _tem_mes_e_ano(palavras: list[str]) -> bool:
     return False
 
 
+def eh_categoria(digitado: str) -> bool:
+    """True se o que foi digitado é só um tipo de publicação ("jornal", "revistas"), não o título de um livro."""
+    pedido = [p for p in tokens(digitado) if p not in STOPWORDS]
+    return bool(pedido) and all(p in _CATEGORIAS for p in pedido)
+
+
 def parece_periodico(titulo: str, autor: str = "", digitado: str = "") -> bool:
     """True se o título (ou o autor) tem cara de jornal, revista, boletim ou documento oficial — não de livro.
 
@@ -118,12 +125,16 @@ def parece_periodico(titulo: str, autor: str = "", digitado: str = "") -> bool:
         return True
     if any(p in _FORTES and p not in digitados for p in palavras):
         return True
+    if eh_categoria(digitado):
+        return True   # quem digita só "jornal" ou "revista" pede uma categoria, e não existe livro com esse título
     abertura = [p for p in palavras if p not in _ARTIGOS][:1]
     if abertura and abertura[0] in _FRACAS and abertura[0] not in digitados:
         return True
     if any(p in _INSTITUCIONAIS and p not in digitados for p in tokens(autor)):
         return True
     principal = [p for p in tokens(titulo_principal(titulo)) if p not in STOPWORDS]
+    if pedido and all(p.isdigit() for p in pedido) and len(principal) > 4:
+        return True   # busca só por número ("1984"): qualquer item com o ano entra; só um título curto é o livro
     return len(principal) >= 10 and len(principal) >= 5 * max(len(pedido), 1)   # título enorme para uma palavra só
 
 
