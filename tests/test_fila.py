@@ -161,6 +161,19 @@ def test_fontes_fora_do_ar_marca_falhou(tmp_path):
     assert any(tag == "erro" and "não responderam" in t for t, tag in logs)
 
 
+def test_busca_incompleta_nao_e_apresentada_como_livro_inexistente(tmp_path):
+    """Regressão: fonte fora do ar + outra sem resultado aparecia como "Livro não encontrado"."""
+    ctx = contexto(tmp_path, [FakeFonte("a", "A", erro=ErroRede("HTTP 503", status=503)),
+                              FakeFonte("b", "B", obras=[])])
+    logs = []
+    q = f.FilaDownloads(ctx, ao_log=lambda i, t, tag: logs.append((t, tag)))
+    item, = q.adicionar(["dom casmurro"])
+    assert q.aguardar(10) and item.estado == f.FALHOU
+    erros_vermelhos = [t for t, tag in logs if tag == "erro"]
+    assert len(erros_vermelhos) == 1 and "incompleta" in erros_vermelhos[0] and "A" in erros_vermelhos[0]
+    assert not any("não encontrado" in t for t, _ in logs)
+
+
 def test_livro_ja_na_biblioteca(tmp_path):
     q, *_ = montar(tmp_path, {"dom casmurro": O(1, "Dom Casmurro")})
     q.adicionar(["dom casmurro"])

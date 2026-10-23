@@ -258,11 +258,12 @@ class App(tk.Tk):
         self._encerrando = True
         self.withdraw()
         self.fila.parar_tudo()
-        self.fila.aguardar(3)  # os parciais ficam guardados para retomar na próxima vez
-        try:
-            self.ctx.biblioteca.fechar()
-        except Exception:
-            pass
+        terminou = self.fila.aguardar(3)  # os parciais ficam guardados para retomar na próxima vez
+        if terminou:   # com download ainda ativo, fechar o banco faria o registro falhar depois de publicar o arquivo
+            try:
+                self.ctx.biblioteca.fechar()
+            except Exception:
+                pass
         self.destroy()
 
     # --- eventos vindos das threads de trabalho -------------------------------

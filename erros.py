@@ -10,6 +10,11 @@ class LivroNaoEncontrado(Exception):
     """Nenhuma obra compatível com o título digitado."""
 
 
+class BuscaIncompleta(Exception):
+    """Nada compatível foi achado, mas parte das fontes falhou ou demorou demais: o livro pode existir.
+    A mensagem lista as fontes que não responderam e o motivo."""
+
+
 class DownloadFalhou(Exception):
     """A obra foi encontrada, mas nenhum download pôde ser concluído."""
 

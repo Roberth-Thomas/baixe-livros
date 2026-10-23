@@ -11,8 +11,8 @@ from typing import Callable, NamedTuple
 
 from arquivos import publicar, sha256_arquivo, validar_arquivo
 from biblioteca import Biblioteca
-from erros import (Cancelado, DownloadFalhou, ErroFontes, ErroRede, FalhaDownload, LivroNaoEncontrado,
-                   TipoNaoPermitido)
+from erros import (BuscaIncompleta, Cancelado, DownloadFalhou, ErroFontes, ErroRede, FalhaDownload,
+                   LivroNaoEncontrado, TipoNaoPermitido)
 from fontes import Arquivo, Obra
 from rede import Http
 from titulos import pontuar, tokens, variantes_busca
@@ -81,7 +81,7 @@ def _consultar_fontes(consulta: str, ctx: Contexto, cancelado: Callable[[], bool
     def pedir(fonte):
         try:
             resultados[fonte.id] = fonte.buscar(consulta, ctx.http, cancelado)
-        except (ErroRede, FalhaDownload, Cancelado) as e:
+        except (ErroRede, FalhaDownload, Cancelado) as e:   # Cancelado é guardado, mas NÃO é falha de fonte
             resultados[fonte.id] = e
         except Exception as e:  # uma fonte com defeito não pode derrubar as outras
             resultados[fonte.id] = ErroRede(f"resposta inesperada ({type(e).__name__})")
@@ -92,15 +92,20 @@ def _consultar_fontes(consulta: str, ctx: Contexto, cancelado: Callable[[], bool
     primeira = None
     while any(t.is_alive() for t in threads):
         _verificar(cancelado)
-        if resultados:  # alguma fonte já respondeu: as lentas têm só `graca` segundos para acompanhar
+        # só uma resposta de verdade (não um erro) dá início ao prazo das fontes lentas
+        if any(not isinstance(r, Exception) for r in dict(resultados).values()):
             primeira = primeira or time.monotonic()
             if time.monotonic() - primeira > ctx.graca:
                 break
         time.sleep(0.05)
+    foto = dict(resultados)   # as threads lentas ainda podem gravar: decide-se tudo em cima desta cópia
+    _verificar(cancelado)
+    if any(isinstance(r, Cancelado) for r in foto.values()):
+        raise Cancelado()
     obras, erros = [], {}
     for fonte in ctx.fontes:
-        r = resultados.get(fonte.id)
-        if fonte.id not in resultados:
+        r = foto.get(fonte.id)
+        if fonte.id not in foto:
             erros[fonte.nome] = f"demorou mais de {ctx.graca:.0f} s para responder"
         elif isinstance(r, Exception):
             erros[fonte.nome] = str(r)
@@ -111,9 +116,11 @@ def _consultar_fontes(consulta: str, ctx: Contexto, cancelado: Callable[[], bool
 
 def encontrar(titulo: str, ctx: Contexto, cancelado: Callable[[], bool]) -> list[Candidato]:
     """Candidatos compatíveis com `titulo`, do melhor para o pior. Só tenta variações de busca
-    (erros de digitação) se o título completo não achar nada compatível."""
+    (erros de digitação) se o título completo não achar nada compatível. Se nada serve e alguma fonte
+    falhou, levanta BuscaIncompleta: "não achei" só vale quando todas as fontes responderam."""
     vistos: set[tuple[str, str]] = set()
     avisadas: set[str] = set()
+    sem_resposta: dict[str, str] = {}
     for consulta in variantes_busca(titulo):
         _verificar(cancelado)
         if consulta != titulo:
@@ -121,6 +128,7 @@ def encontrar(titulo: str, ctx: Contexto, cancelado: Callable[[], bool]) -> list
         ctx.log(f"Buscando “{consulta}” em {', '.join(f.nome for f in ctx.fontes)}...", None)
         obras, erros = _consultar_fontes(consulta, ctx, cancelado)
         for nome, erro in erros.items():
+            sem_resposta.setdefault(nome, erro)
             if nome not in avisadas:
                 avisadas.add(nome)
                 ctx.log(f"Fonte indisponível ({nome}): {erro}", None)
@@ -138,6 +146,8 @@ def encontrar(titulo: str, ctx: Contexto, cancelado: Callable[[], bool]) -> list
         ctx.log(f"{len(obras)} resultado(s), {len(candidatos)} compatível(is) com o título.", None)
         if candidatos:
             return [c for _, _, c in sorted(candidatos, key=lambda x: (x[0], x[1]))]
+    if sem_resposta:
+        raise BuscaIncompleta("; ".join(f"{n}: {e}" for n, e in sem_resposta.items()))
     return []
 
 
@@ -164,8 +174,18 @@ def _baixar_arquivo(obra: Obra, arq: Arquivo, titulo_final: str, ctx: Contexto,
         if os.path.exists(pronto):
             os.remove(pronto)
         raise
-    ctx.biblioteca.registrar(titulo=obra.titulo, autor=obra.autor, fonte=obra.fonte, fonte_id=obra.id,
-                             arquivo=nome, sha256=sha, tamanho=tamanho, licenca=obra.licenca)
+    try:
+        ctx.biblioteca.registrar(titulo=obra.titulo, autor=obra.autor, fonte=obra.fonte, fonte_id=obra.id,
+                                 arquivo=nome, sha256=sha, tamanho=tamanho, licenca=obra.licenca)
+    except Exception as e:
+        # arquivo e registro andam juntos: sem registro, desfaz a publicação (senão a próxima tentativa
+        # baixa de novo e cria "Livro (2).pdf")
+        try:
+            os.remove(os.path.join(ctx.pasta, nome))
+        except OSError as erro_remocao:
+            ctx.log(f"  não consegui remover “{nome}” depois da falha no registro: {erro_remocao}", None)
+        raise FalhaDownload(f"não consegui registrar na biblioteca ({type(e).__name__}); "
+                            "o arquivo foi removido, tente de novo") from e
     for resto in (parcial, parcial + ".json"):
         if os.path.exists(resto):
             os.remove(resto)

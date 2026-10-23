@@ -7,7 +7,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Callable
 
-from erros import Cancelado, DownloadFalhou, ErroFontes, LivroNaoEncontrado
+from erros import BuscaIncompleta, Cancelado, DownloadFalhou, ErroFontes, LivroNaoEncontrado
 from nucleo import Contexto, processar
 
 NA_FILA, BUSCANDO, BAIXANDO = "Na fila", "Buscando", "Baixando"
@@ -160,6 +160,10 @@ class FilaDownloads:
         except LivroNaoEncontrado:
             self._log(item, f"✖ Livro não encontrado: “{item.titulo}”", "erro")
             return self._mudar(item, NAO_ENCONTRADO)
+        except BuscaIncompleta as e:
+            self._log(item, f"✖ Busca incompleta: “{item.titulo}” não apareceu nas fontes que responderam, mas "
+                            f"{e}. O livro pode existir; use “Repetir falhas” mais tarde.", "erro")
+            return self._mudar(item, FALHOU)
         except DownloadFalhou as e:
             self._log(item, f"✖ Livro encontrado (“{e.nome}”), mas o download não foi possível: {e.motivo}", "erro")
             return self._mudar(item, FALHOU)

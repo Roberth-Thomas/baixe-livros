@@ -7,6 +7,7 @@ import threading
 import time
 
 from biblioteca import Biblioteca
+from erros import Cancelado
 from fontes import Arquivo, Obra
 from nucleo import Contexto
 
@@ -64,7 +65,7 @@ class FakeFonte:
             limite = time.monotonic() + 8     # se uma regressão deixar de esperar só `graca`, o teste falha em vez de travar
             while not self.bloquear.is_set() and time.monotonic() < limite:
                 if cancelado():
-                    return []
+                    raise Cancelado()   # como o Http real: cancelar é uma exceção, não uma lista vazia
                 time.sleep(0.02)
         if self.erro:
             raise self.erro

@@ -222,6 +222,17 @@ class TestRobustez:
         monkeypatch.undo()
 
 
+class TestEncerramento:
+    def test_fechar_janela_nao_fecha_o_banco_se_a_fila_ainda_trabalha(self, app, monkeypatch):
+        """Regressão: o banco era fechado após 3 s mesmo com download em andamento; o arquivo era
+        publicado e o registro falhava."""
+        monkeypatch.setattr(app, "destroy", lambda: None)
+        monkeypatch.setattr(app.fila, "aguardar", lambda timeout=None: False)
+        app.fechar_janela()
+        assert app.ctx.biblioteca.listar() == []        # a conexão continua aberta
+        monkeypatch.undo()
+
+
 class TestFormatacao:
     def test_tamanho(self):
         assert b.formatar_tamanho(None) == "" and b.formatar_tamanho(0) == ""

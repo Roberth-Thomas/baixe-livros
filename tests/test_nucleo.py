@@ -1,10 +1,12 @@
 """Testes do núcleo: busca, escolha do candidato, download, validação e registro (com fontes e HTTP falsos)."""
 import os
+import sqlite3
 import threading
 import time
 
 import pytest
 
+import erros
 import nucleo as n
 from erros import (Cancelado, DownloadFalhou, ErroFontes, ErroRede, LivroNaoEncontrado)
 from helpers import EPUB, PDF, FakeFonte, FakeHttp, arq, contexto, obra
@@ -106,6 +108,33 @@ class TestFalhas:
         assert n.processar("dom casmurro", ctx).fonte == "b"
         assert sum("Fonte indisponível (A)" in m for m, _ in ctx.logs) == 1
 
+    def test_fonte_fora_do_ar_e_outra_sem_resultado_nao_diz_que_o_livro_nao_existe(self, tmp_path):
+        """Regressão: "não sei" (fonte caiu) era tratado como "não existe"."""
+        a = FakeFonte("a", "A", erro=ErroRede("HTTP 503", status=503))
+        b = FakeFonte("b", "B", obras=[])
+        ctx = contexto(tmp_path, [a, b])
+        with pytest.raises(erros.BuscaIncompleta) as e:
+            n.processar("dom casmurro", ctx)
+        assert not isinstance(e.value, LivroNaoEncontrado) and "A: HTTP 503" in str(e.value)
+
+    def test_fonte_ok_sem_resultado_continua_sendo_nao_encontrado(self, tmp_path):
+        ctx = contexto(tmp_path, [FakeFonte("a", "A", obras=[]), FakeFonte("b", "B", obras=[])])
+        with pytest.raises(LivroNaoEncontrado):
+            n.processar("dom casmurro", ctx)
+
+    def test_erro_rapido_de_uma_fonte_nao_encurta_o_prazo_da_outra(self, tmp_path):
+        """Regressão: a "graça" começava a contar mesmo quando a 1ª resposta era um erro."""
+        quebrada = FakeFonte("q", "Quebrada", erro=ErroRede("HTTP 500", status=500))
+        lenta = FakeFonte("l", "Lenta", [obra("l", "1")], {"1": [arq(URL)]}, bloquear=threading.Event())
+        ctx = contexto(tmp_path, [quebrada, lenta], FakeHttp({URL: PDF}), graca=0.3)
+        timer = threading.Timer(0.9, lenta.bloquear.set)
+        timer.start()
+        try:
+            assert n.processar("dom casmurro", ctx).fonte == "l"
+        finally:
+            timer.cancel()
+            lenta.bloquear.set()
+
     def test_fonte_com_defeito_inesperado_e_isolada(self, tmp_path):
         a = FakeFonte("a", "A", erro=KeyError("campo"))
         b = FakeFonte("b", "B", [obra("b", "1")], {"1": [arq(URL)]})
@@ -205,6 +234,21 @@ class TestDuplicatas:
         assert sorted(r.ja_existia for r in resultados) == [False, True, True]
 
 
+class TestRegistro:
+    def test_falha_ao_registrar_nao_deixa_arquivo_orfao(self, tmp_path, monkeypatch):
+        """Regressão: o arquivo era publicado e, se o banco falhasse, ficava no disco sem registro
+        (e a próxima tentativa criava "Livro (2).pdf")."""
+        ctx, *_ = cenario(tmp_path)
+
+        def quebra(**kw):
+            raise sqlite3.OperationalError("database is locked")
+        monkeypatch.setattr(ctx.biblioteca, "registrar", quebra)
+        with pytest.raises(DownloadFalhou) as e:
+            n.processar("dom casmurro", ctx)
+        assert "registrar" in e.value.motivo
+        assert livros(ctx) == [] and os.listdir(os.path.join(ctx.pasta, n.PASTA_PARCIAIS)) == []
+
+
 class TestCancelamento:
     def test_cancelado_antes_de_comecar(self, tmp_path):
         ctx, fonte, http = cenario(tmp_path)
@@ -224,6 +268,13 @@ class TestCancelamento:
         with pytest.raises(Cancelado):
             n.processar("dom casmurro", ctx, cancelado=lambda: estado["baixando"])
         assert livros(ctx) == [] and ctx.biblioteca.listar() == []
+
+    def test_cancelado_dentro_das_fontes_e_cancelado_nao_falha_de_fonte(self, tmp_path):
+        """Regressão: Parar durante a busca virava "As fontes não responderam: A: ; B: "."""
+        fontes = [FakeFonte("a", "A", erro=Cancelado()), FakeFonte("b", "B", erro=Cancelado())]
+        ctx = contexto(tmp_path, fontes)
+        with pytest.raises(Cancelado):
+            n.processar("dom casmurro", ctx)
 
     def test_cancelar_a_busca_interrompe_fonte_travada(self, tmp_path):
         trava = FakeFonte("t", "Travada", bloquear=threading.Event())
