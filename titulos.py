@@ -68,6 +68,65 @@ def pontuar(digitado: str, titulo_livro: str, contexto: str = "") -> float:
     return nota if nota >= MIN_NOTA else 0.0
 
 
+# --- "só livros": títulos com cara de jornal, revista, boletim ou documento oficial ---------------------
+_ARTIGOS = {"o", "os", "as", "the", "el", "la", "los", "las", "le", "les"}   # "a" fica de fora: em inglês é "A Journal of..."
+_FORTES = {"newsletter", "newspaper", "newspapers", "magazine", "magazines", "yearbook", "gazette", "gazeta",
+           "bulletin", "boletim", "boletin", "almanac", "almanah", "almanaque", "periodico", "periodicos"}
+_FRACAS = {"jornal", "journal", "revista", "revue", "rivista", "zeitschrift", "manual"}   # só se abrem o título
+_INSTITUCIONAIS = {"secretariat", "ministry", "ministerio", "government", "governo", "gobierno", "parliament",
+                   "parlamento", "committee", "comite", "commission", "department", "departamento",
+                   "jornal", "jornais", "newspaper", "gazette", "gazeta"}   # autor que é órgão/jornal, não pessoa
+_MESES = {"jan", "janeiro", "january", "enero", "fev", "fevereiro", "feb", "february", "febrero", "marco", "march",
+          "marzo", "abr", "abril", "apr", "april", "mai", "maio", "mayo", "jun", "junho", "june", "junio", "jul",
+          "julho", "july", "julio", "ago", "agosto", "aug", "august", "sep", "sept", "setembro", "september",
+          "septiembre", "oct", "outubro", "october", "octubre", "nov", "novembro", "november", "noviembre", "dec",
+          "dezembro", "december", "diciembre", "dic"}
+_MESES_AMBIGUOS = {"mar", "may", "set", "out", "dez"}   # também são palavras comuns: só contam com dia + ano
+_ANO = re.compile(r"(1[5-9]|20)\d\d")
+_DATA_OU_EDICAO = [re.compile(p) for p in (
+    r"\b(1[5-9]|20)\d\d[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b",     # 1984-09-14
+    r"\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](1[5-9]|20)\d\d\b",     # 25/04/1984
+    r"\bn[º°]\s*\d+", r"\bnr\.?\s*\d+", r"\bn\.\s*\d+", r",\s*no\.?\s*\d+",       # Nº 22 · Nr. 14 · n.14 · , No. 40
+    r"\bv\d+\s*n\d+", r"\bvol\.?\s*\d+\s*,?\s*(no|n)\.?\s*\d+",                    # v3n1 · Vol. 3, No. 2
+    r"\banno?\s+([ivxlc]+|\d{1,2})\b", r"\bissue\s+\d+")]                        # Ano I · Anno 1 · Issue 4
+
+
+def _tem_mes_e_ano(palavras: list[str]) -> bool:
+    for i, p in enumerate(palavras):
+        janela = palavras[i + 1:i + 4]
+        if p in _MESES and any(_ANO.fullmatch(w) for w in janela):
+            return True
+        if p in _MESES_AMBIGUOS and len(janela) >= 2 and janela[0].isdigit() and len(janela[0]) <= 2 \
+                and _ANO.fullmatch(janela[1]):
+            return True
+    return False
+
+
+def parece_periodico(titulo: str, autor: str = "", digitado: str = "") -> bool:
+    """True se o título (ou o autor) tem cara de jornal, revista, boletim ou documento oficial — não de livro.
+
+    Palavras que o próprio usuário digitou não contam contra o resultado quando o título digitado tem 2+
+    palavras: quem busca "Jornal de um rebelde" quer esse título; quem digita só "jornal" pede uma categoria,
+    e isso não é livro. Um ano sozinho ("Dom Casmurro (1899)") é normal em livro; data completa, mês + ano e
+    número de edição não são."""
+    pedido = [p for p in tokens(digitado) if p not in STOPWORDS]
+    digitados = set(pedido) if len(pedido) >= 2 else set()
+    if any(p.search(titulo.casefold()) for p in _DATA_OU_EDICAO):
+        return True
+    palavras = tokens(titulo)
+    if _tem_mes_e_ano(palavras):
+        return True
+    if any(p in _FORTES and p not in digitados for p in palavras):
+        return True
+    abertura = [p for p in palavras if p not in _ARTIGOS][:1]
+    if abertura and abertura[0] in _FRACAS and abertura[0] not in digitados:
+        return True
+    if any(p in _INSTITUCIONAIS and p not in digitados for p in tokens(autor)):
+        return True
+    principal = [p for p in tokens(titulo_principal(titulo)) if p not in STOPWORDS]
+    return len(principal) >= 10 and len(principal) >= 5 * max(len(pedido), 1)   # título enorme para uma palavra só
+
+
 def variantes_busca(titulo: str):
     """Consultas a tentar: o título e, como o site só acha trechos exatos, prefixos e
     sufixos das palavras (um erro de digitação quebra a palavra em duas partes

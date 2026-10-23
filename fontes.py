@@ -28,7 +28,8 @@ PREFIXOS_NAO_LIVRO = (          # padrões de coleções que nunca são livros (
     "government", "usgov", "usfederal", "cia-", "nationalsecurity", "periodical", "journal", "biostor",
     "newspaper", "magazine", "micro", "uncg", "pub_", "sim_", "parliament", "britishparliament", "ondata",
     "patent", "court", "biodiversity", "manual", "fedlink", "dtic", "nasa", "datasets", "classmates",
-    "yearbook", "emptyfiles")
+    "yearbook", "emptyfiles", "vonter", "the_stacks", "gazetteofindia", "dlarc", "industrydocuments",
+    "paulhagstrom", "memoriaestatistica")
 COLECOES_LIVRO = ("booksbylanguage", "luso-livros", "gutenberg", "americana", "toronto", "europeanlibraries",
                   "brigham_young_university", "folkscanomy", "autores", "universityofottawa")
 

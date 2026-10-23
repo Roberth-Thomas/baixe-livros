@@ -15,7 +15,7 @@ from erros import (BuscaIncompleta, Cancelado, DownloadFalhou, ErroFontes, ErroR
                    LivroNaoEncontrado, TipoNaoPermitido)
 from fontes import Arquivo, Obra
 from rede import Http
-from titulos import pontuar, tokens, variantes_busca
+from titulos import parece_periodico, pontuar, tokens, variantes_busca
 
 PASTA_PARCIAIS = ".baixando"
 MAX_CANDIDATOS = 5       # obras tentadas por título
@@ -135,15 +135,21 @@ def encontrar(titulo: str, ctx: Contexto, cancelado: Callable[[], bool]) -> list
         if len(erros) == len(ctx.fontes):
             raise ErroFontes("; ".join(f"{n}: {e}" for n, e in erros.items()))
         candidatos = []
+        descartados = 0
         for pos, obra in enumerate(obras):
             if (obra.fonte, obra.id) in vistos:
                 continue
             vistos.add((obra.fonte, obra.id))
+            if parece_periodico(obra.titulo, obra.autor, titulo):   # só livros: jornal, revista e documento ficam de fora
+                descartados += 1
+                continue
             nota = pontuar(titulo, obra.titulo, obra.autor)
             if nota > 0:
                 bonus = BONUS_IDIOMA if obra.idioma.lower() in ctx.idiomas else 0.0
                 candidatos.append((-(nota + bonus), pos, Candidato(nota, obra)))
-        ctx.log(f"{len(obras)} resultado(s), {len(candidatos)} compatível(is) com o título.", None)
+        ctx.log(f"{len(obras)} resultado(s), {len(candidatos)} compatível(is) com o título."
+                + (f" {descartados} descartado(s) por parecerem jornal, revista ou documento." if descartados else ""),
+                None)
         if candidatos:
             return [c for _, _, c in sorted(candidatos, key=lambda x: (x[0], x[1]))]
     if sem_resposta:

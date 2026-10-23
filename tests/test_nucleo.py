@@ -78,6 +78,26 @@ class TestProcessar:
             n.processar("dom casmurro", ctx)
         assert http.baixados == [] and livros(ctx) == []
 
+    def test_jornal_nunca_e_escolhido_nem_baixado(self, tmp_path):
+        """Regressão ("tá baixando jornal ainda"): para "1984", qualquer título que contivesse "1984"
+        passava da nota mínima; o livro de verdade perdia a vez para diários oficiais e boletins."""
+        obras = [obra(id="9", titulo="Haryana Gazette, 1984-09-14, No. 40", autor="Government of Haryana"),
+                 obra(id="8", titulo="Jornal O Popular - 25/04/1984 - Capa", autor="Jornal O Popular"),
+                 obra(id="1", titulo="1984", autor="George Orwell")]
+        ctx, _, http = cenario(tmp_path, obras=obras,
+                               arquivos={i: [arq(f"https://x.test/{i}.pdf")] for i in "981"},
+                               conteudos={f"https://x.test/{i}.pdf": PDF for i in "981"})
+        assert n.processar("1984", ctx).nome == "1984"
+        assert http.baixados == ["https://x.test/1.pdf"]
+
+    def test_so_periodicos_nos_resultados_e_livro_nao_encontrado(self, tmp_path):
+        obras = [obra(id="9", titulo="Haryana Gazette, 1984-09-14, No. 40", autor="Government of Haryana"),
+                 obra(id="8", titulo="Revista Paradoxa 12", autor="Paradoxa Centro de Medios")]
+        ctx, _, http = cenario(tmp_path, obras=obras)
+        with pytest.raises(LivroNaoEncontrado):
+            n.processar("1984", ctx)
+        assert http.baixados == [] and livros(ctx) == []
+
     def test_so_tenta_variantes_se_o_titulo_completo_falhar(self, tmp_path):
         ctx, fonte, _ = cenario(tmp_path)
         n.processar("dom casmurro", ctx)

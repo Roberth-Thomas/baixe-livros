@@ -205,7 +205,14 @@ class TestSoLivros:
         (["Periodicals"], "Fulano", False), (["opensource"], "", False), (["opensource"], "  ", False),
         (["opensource"], "Fulano", True), ([], "Fulano", True), ([], "", False),
         (["microlog", "microfiche"], "Fulano", False), (["classmates"], "Fulano", False),
-        (["emptyfiles", "community"], "Fulano", False), (["booksbylanguage_portuguese"], "", True)])
+        (["emptyfiles", "community"], "Fulano", False), (["booksbylanguage_portuguese"], "", True),
+        # coleções vistas na API real trazendo diários oficiais, boletins, depoimentos e revistas
+        (["vonter_stacks", "the_stacks"], "Rajya Sabha Secretariat", False),
+        (["gazetteofindia", "JaiGyan"], "Government of Haryana", False),
+        (["dlarc-newsletters", "dlarc", "americana"], "FADCA", False),
+        (["industrydocuments", "ucsanfranciscolibrary", "americana"], "", False),
+        (["paulhagstrom_stacks", "the_stacks"], "SATN", False),
+        (["memoriaestatisticadobrasil", "brasiliana"], "SRF", False)])
     def test_parece_livro(self, colecoes, autor, esperado):
         assert f.parece_livro(colecoes, autor) is esperado
 

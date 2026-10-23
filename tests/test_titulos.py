@@ -15,6 +15,50 @@ class TestTokens:
         assert b.tokens("Война и мир") == ["война", "и", "мир"]
 
 
+class TestParecePeriodico:
+    """Títulos reais devolvidos pelo Internet Archive para buscas como "1984", "jornal" e "revista"."""
+
+    @pytest.mark.parametrize("titulo,autor,digitado", [
+        ("Haryana Gazette, 1984-09-14, No. 40", "Government of Haryana", "1984"),           # data completa
+        ("Jornal O Popular - 25/04/1984 - Capa", "Jornal O Popular", "1984"),
+        ("Impact of tHe price hike in steel on the States (2-Aug-1984)", "Rajya Sabha Secretariat", "1984"),
+        ("Jornal do Comércio, 22 out. 1948, n.14.884", "Orgão dos DIÁRIOS ASSOCIADOS", "jornal do comercio"),
+        ("FADCA Beacon November/December 1984", "Florida Amateur Digital Communications", "1984"),  # mês + ano
+        ("Deposition of JAMES CHANDLER BOWLING, December 19, 1984, CIP", "", "1984"),
+        ("Softalk for the IBM PC v3n1 1984-06 Jun", "Softalk for the IBM PC", "1984"),     # volume/número
+        ("Revista N°22 del Instituto de Estudios Genealógicos", "Instituto", "estudios"),
+        ("Weekly Coal Production Mar. 17,1984", "U.s. Department Of Energy", "1984"),
+        ("Jornal O Liberal", "Jornais da Paraíba (XIX e XX)", "liberal"),                  # nome começa com "Jornal"
+        ("Revista Paradoxa 12", "Paradoxa Centro de Medios", "paradoxa"),
+        ("Almanah Flacara 1984 pagina 228-287", "", "1984"),
+        ("JORNAL O FUTURO #6", "PCBR", "jornal"),            # a palavra sozinha é categoria, não título: não isenta
+        ("Revista de Obras Públicas de Puerto Rico", "", "revista"),
+        ("Industry Newsletter", "", "industry"),                                          # palavra forte em qualquer lugar
+        ("Twenty First Report on Committee on Petitions", "Lok Sabha Secretariat", "petitions"),  # autor institucional
+        ("Goma, Paul Ela (ed. 1984) V. 0.9.8 MMXII Pagina Alfa Beta", "", "1984"),         # título enorme para 1 palavra
+    ])
+    def test_descarta_jornais_revistas_documentos(self, titulo, autor, digitado):
+        assert b.parece_periodico(titulo, autor, digitado) is True
+
+    @pytest.mark.parametrize("titulo,autor,digitado", [
+        ("Dom Casmurro", "Machado de Assis", "dom casmurro"),
+        ("Dom Casmurro - Machado de Assis (1899)", "Machado de Assis", "dom casmurro"),     # um ano sozinho é normal
+        ("Iracema (Versão em pt-PT)", "José de Alencar", "iracema"),
+        ("1984", "George Orwell", "1984"),
+        ("Fahrenheit 451", "Ray Bradbury", "fahrenheit 451"),
+        ("The No. 1 Ladies' Detective Agency", "Alexander McCall Smith", "ladies detective agency"),
+        ("A Journal of the Plague Year", "Daniel Defoe", "plague year"),                   # "journal" no meio: livro
+        ("Diário de Anne Frank", "Anne Frank", "anne frank"),
+        ("Memorias de José Garibaldi, volume II", "Garibaldi, Giuseppe", "garibaldi"),
+        ("Brasil 1500-1822", "", "brasil"),                                                 # intervalo de anos: livro
+        ("Jornal de um rebelde", "Sampaio, Albino Forjaz de", "jornal de um rebelde"),     # o usuário digitou a palavra
+        ("Revista Paradoxa 12", "Paradoxa Centro de Medios", "revista paradoxa 12"),       # idem
+        ("O Cortiço", "Aluísio Azevedo", "o cortico"),
+    ])
+    def test_nao_descarta_livros(self, titulo, autor, digitado):
+        assert b.parece_periodico(titulo, autor, digitado) is False
+
+
 class TestPontuar:
     @pytest.mark.parametrize("digitado,titulo", [
         ("ads", "Facebook Ads: O Guia Definitivo"),
