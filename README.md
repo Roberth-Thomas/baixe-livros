@@ -83,6 +83,11 @@ você pode usar o livro é responsabilidade sua.**
 Só aceita arquivos de tipo de livro, só segue HTTPS para domínios permitidos e nunca executa o que baixa.
 Detalhes e como reportar uma vulnerabilidade em [SECURITY.md](SECURITY.md).
 
+## Licença
+
+[MIT](LICENSE). A licença cobre o código deste repositório, não os livros baixados: cada obra segue a
+licença da própria fonte (veja a seção *Direitos autorais*).
+
 ## Histórico
 
 A versão 1 baixava do baixelivros.com.br com um Chrome automatizado. O site passou a bloquear acesso
