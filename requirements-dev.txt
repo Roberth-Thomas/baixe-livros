@@ -1,3 +1,3 @@
 # Ferramentas de desenvolvimento (testes e geração do .exe). Versões exatas para builds reproduzíveis.
-pytest==9.1.1
+pytest==9.2.0
 pyinstaller==6.22.3
